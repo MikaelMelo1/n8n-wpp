@@ -1,0 +1,118 @@
+{
+  "name": "AgeteIA-Imediata (Humano Override)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "Webhook",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "event", "value": "={{ $json.body.event }}", "type": "string" },
+            { "name": "session", "value": "={{ $json.body.session }}", "type": "string" },
+            { "name": "message_id", "value": "={{ $json.body.payload.id }}", "type": "string" },
+            { "name": "from", "value": "={{ $json.body.payload.from }}", "type": "string" },
+            { "name": "to", "value": "={{ $json.body.payload.to }}", "type": "string" },
+            { "name": "fromMe", "value": "={{ $json.body.payload.fromMe }}", "type": "boolean" },
+            { "name": "source", "value": "={{ $json.body.payload.source }}", "type": "string" },
+            { "name": "body", "value": "={{ $json.body.payload.body }}", "type": "string" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [200, 0],
+      "id": "Dados",
+      "name": "Dados"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.fromMe }}",
+              "operator": { "type": "boolean", "operation": "isTrue" }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [400, 0],
+      "id": "MensagemMinha",
+      "name": "Mensagem é minha?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.function",
+      "position": [600, -120],
+      "id": "AtivarHumano",
+      "name": "Ativar Humano",
+      "parametersFunction": "const data = getWorkflowStaticData('global');\n\ndata[$json.from] = {\n  human: true,\n  since: Date.now()\n};\n\nreturn $input.all();"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.function",
+      "position": [600, 120],
+      "id": "HumanoAtivo",
+      "name": "Humano Ativo?",
+      "parametersFunction": "const data = getWorkflowStaticData('global');\nconst chat = data[$json.from];\n\nif (chat?.human) {\n  return [];\n}\n\nreturn $input.all();"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body }}",
+        "options": {
+          "systemMessage": "Você é um agente de atendimento virtual da Stream Vision.\nCaso um atendente humano tenha assumido, você NÃO deve responder."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [820, 120],
+      "id": "AIAgent",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "={{ $json.session }}",
+        "chatId": "={{ $json.from }}",
+        "text": "={{ $json.output }}"
+      },
+      "type": "n8n-nodes-waha.WAHA",
+      "typeVersion": 202411,
+      "position": [1040, 120],
+      "id": "SendText",
+      "name": "Enviar Mensagem",
+      "credentials": {
+        "wahaApi": {
+          "name": "WAHA account",
+          "id": "VTDDyV6UX2XxJ87n"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Dados", "type": "main" }]] },
+    "Dados": { "main": [[{ "node": "MensagemMinha", "type": "main" }]] },
+    "MensagemMinha": {
+      "main": [
+        [{ "node": "AtivarHumano", "type": "main" }],
+        [{ "node": "HumanoAtivo", "type": "main" }]
+      ]
+    },
+    "HumanoAtivo": { "main": [[{ "node": "AIAgent", "type": "main" }]] },
+    "AIAgent": { "main": [[{ "node": "SendText", "type": "main" }]] }
+  },
+  "active": true
+}
